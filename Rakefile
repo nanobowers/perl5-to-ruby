@@ -12,8 +12,11 @@ task :test do
   good_tests = FileList.new("test/working/*.pl")
   
   good_tests.each do |pfile| 
-    out = pfile.ext("rb").sub(
-    sh "./bin/p2r #{pfile} > #{out}"
+    out_rb = pfile.ext("rb")
+    sh "./bin/p2r #{pfile} > #{out_rb}"
+    ruby(out_rb) do |ok, result|
+      puts ok
+    end
   end
 
 end

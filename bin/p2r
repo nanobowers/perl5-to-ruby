@@ -124,10 +124,17 @@ sub to_ruby {
     }
 
     ## BEGINNING OF LISTS, CONSTRUCTORS, ETC ##
-
+=pod
+    if ($self->isa("PPI::Structure")) {
+	print  "XX|";
+	print  ref($self);
+	print  $self->content;
+	print  "|XX";
+   }
+=cut
     if ($self->isa("PPI::Structure::List")) {
 	print '(';
-	print 'XX';
+	#print 'XX';
     } elsif ($self->isa("PPI::Structure::Constructor")) {
 	print $self->start;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
@@ -198,10 +205,17 @@ sub to_ruby {
 	print $self->finish;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
 	print "]";
+    } elsif ( $self->isa("PPI::Structure::Block")  ) {
+	#print "end ";
     }
-    if ($self->isa("PPI::Statement::Compound") || 
-	$self->isa("PPI::Statement::Sub") ) {
-	print "end";
+
+    if ($self->isa("PPI::Statement::Compound")) {
+	# do not want to duplicate 'end' inside if/else/elsif chains
+	# need either struct:block stat:compound, not both
+	print "end #(COMP) ";
+    } elsif ($self->isa("PPI::Statement::Sub")) {
+	# where is this used? 
+	# print "end #(SUB) ";
     }
 }
 
@@ -225,7 +239,7 @@ sub ruby_fix_var { ## non-oo method ##
     }
     ## lowercasing of vars
     my @varlist = split(/::/,$varname);
-    $varlist[-1] =~ s/^([A-Z])/lc($1)/gxe;
+    $varlist[-1] =~ s/^([A-Z_0-9]+)/lc($1)/gxe;
     $varname = join('::',@varlist);
     return $varname
 }
@@ -264,6 +278,7 @@ sub to_ruby {
 
     } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
 	my $word =  $self->content;
+	print STDERR "XXXX $word XXXX";
 	$word =~ s/^qq/%Q/;
 	print $word;
     } elsif ( $self->isa("PPI::Token::Quote::Double")) {
@@ -276,21 +291,29 @@ sub to_ruby {
 	my $word =  $self->content;
 	$word =~ s/^q/%q/;
 	print $word;
-
+    } elsif ( $self->isa("PPI::Token::QuoteLike::Regexp")) {
+	my $word =  $self->content;
+	$word =~ s/^qr/%r/;
+	print $word;
+    } elsif ( $self->isa("PPI::Token::QuoteLike::Words")) {
+	my $word =  $self->content;
+	$word =~ s/^qw/%w/;
+	print $word;
+    } elsif ( $self->isa("PPI::Token::QuoteLike::Command")) {
+	my $word =  $self->content;
+	$word =~ s/^qx/%x/;
+	print $word;
     } elsif ( $self->isa("PPI::Token::Data") ||
 	      $self->isa("PPI::Token::End") ||
 	      $self->isa("PPI::Token::HereDoc") ||
 	      $self->isa("PPI::Token::Label") ||
 	      # pass magic-vars through for now. 
-	      # may need do some mappingin the future
+	      # may need do some mapping in the future
 	      $self->isa("PPI::Token::Magic") ||
 	      $self->isa("PPI::Token::Quote::Single") ||
 	      $self->isa("PPI::Token::Quote") ||
 	      $self->isa("PPI::Token::QuoteLike::Backtick") ||
-	      $self->isa("PPI::Token::QuoteLike::Command") ||
 	      $self->isa("PPI::Token::QuoteLike::Readline") ||
-	      $self->isa("PPI::Token::QuoteLike::Regexp") ||
-	      $self->isa("PPI::Token::QuoteLike::Words") ||
 	      $self->isa("PPI::Token::Regexp::Match") ||
 	      $self->isa("PPI::Token::Regexp") ||
 	      $self->isa("PPI::Token::Separator") ||
@@ -352,8 +375,7 @@ sub to_ruby {
 package PPI::Token::Pod;
 sub to_ruby {
     my ($self) = @_;
-    my $pod = $self->content;
-    my @podlines = split("\n",$pod);
+    my @podlines = split("\n", $self->content);
     my @rdoclines = ();
     for my $podline (@podlines) {
 	## currently, nested bold/code/ital modifers are unsupported.
@@ -362,23 +384,21 @@ sub to_ruby {
 	$podline=~s/B\<([^>]*)\>/<b>$1<\/b>/g;
 	
 	if ($podline=~/^\s*\=(pod|cut|back|over.*)/x) { 
-	    # skip =pod, =cut
+	    # skip =pod, =cut, etc
+	    next;
 	} elsif ($podline=~/^\s*\=item\s+\*/x) {
 	    $podline=~s/\s*\=item\s+\*/\*/;
-	    print "# ${podline}\n";
 	} elsif ($podline=~/^\s*\=item\s+([0-9]+)/x) {
 	    $podline=~s/\s*\=item\s+(\d+)/$1\./;
-	    print "# ${podline}\n";
 	} elsif ($podline=~/^\s*\=head1/x) {
 	    $podline=~s/\s*\=head1/=/;
-	    print "# ${podline}\n";
 	} elsif ($podline=~/^\s*\=head2/x) {
 	    $podline=~s/\s*\=head2/==/;
-	    print "# ${podline}\n";
-	} else {
-	    print "# ${podline}\n";
 	}
 	push @rdoclines, $podline;
+    }
+    foreach my $line (@rdoclines) {
+	print "# $line\n";
     }
     $self->set_ruby(join('',@rdoclines));
 }
@@ -403,8 +423,8 @@ sub to_ruby {
     }
 
     my $regex = ".${subop}(/$w[1]/${reopts}, '$w[2]')";
-    $self->set_ruby($regex);
     print $regex;
+    $self->set_ruby($regex);
 } 
 
 package PPI::Token::Regexp::Transliterate;
@@ -419,8 +439,8 @@ sub to_ruby {
     #replace string returned from split may be undef/empty
     $w[2] = "" unless defined $w[2];  
     my $regex = ".tr!('$w[1]','$w[2]')";
-    $self->set_ruby($regex);
     print $regex;
+    $self->set_ruby($regex);
 } 
 
 package PPI::Token::Symbol;
