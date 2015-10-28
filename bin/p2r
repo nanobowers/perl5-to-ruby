@@ -1,0 +1,502 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use PPI;
+use Data::Dumper;
+use Carp;
+
+##===========================================================
+
+package PPI::Document;
+
+sub to_ruby {
+    my ($self) = @_;
+    foreach my $kid ($self->children) {
+	$kid->to_ruby();
+    }
+}
+
+##===========================================================
+
+package PPI::Node;
+
+
+sub token_replace {
+    my ($self, $replace_ref) = @_;
+    my @kids = $self->children;
+    #print Data::Dumper->Dump($replace_ref);
+
+    my $matched_all = 0;
+    my $current_matcher = 0;
+    my $in_a_match = 0;
+    my $tok=0; 
+
+    my @commit_kids_for_deletion = ();
+    my @kids_for_deletion = ();
+    while ($tok<@kids) {
+
+	if (defined $replace_ref->[$current_matcher]) {
+	    my $match_type = $replace_ref->[$current_matcher]->[0];
+	    my $match_needed = $replace_ref->[$current_matcher]->[1];
+	    my $match_action = $replace_ref->[$current_matcher]->[2];
+	    my $match_reqvalue = $replace_ref->[$current_matcher]->[3];
+	    my $match_replaceval = $replace_ref->[$current_matcher]->[4];
+	    my $match_class = "PPI::Token::${match_type}";
+	    my $cur_class = ref($kids[$tok]);
+	    my $is_class_match = $cur_class =~ $match_class;
+	    if ( $is_class_match and $match_needed) {
+		if (defined $match_reqvalue and $match_reqvalue ne $kids[$tok]->content) {
+		    #print "DEBUG req'd match found, but incorrect req.value\n";
+		    $in_a_match = 0;
+		    $current_matcher = 0;
+		    $tok++;
+		} else {
+		    #print "DEBUG req'd match found\n";
+		    $in_a_match ++;
+		    $current_matcher++;
+		    if ($match_action eq 'toss') {
+			push(@kids_for_deletion, $tok);
+		    } elsif ($match_action eq 'replace') {
+			Carp::croak("no replaceval given") unless (defined $match_replaceval);
+			$kids[$tok]->set_content($match_replaceval);
+		    }
+		    $tok++;
+		}
+	    }
+	    elsif ( $is_class_match and !$match_needed) {
+		#print "DEBUG unreq'd match found\n";
+		$in_a_match ++;
+		$current_matcher++;
+		push(@kids_for_deletion, $tok) if ($match_action eq 'toss');
+		$tok++;
+	    }
+	    elsif ( !$is_class_match and !$match_needed) {
+		#print "DEBUG unreq'd match not-found\n";
+		$in_a_match ++;
+		$current_matcher++;
+	    } 
+	    else {
+		$in_a_match = 0;
+		$current_matcher = 0;
+		$tok++;
+	    }
+	    #print "DEBUG $match_class (",($current_matcher-1),") $cur_class (",($tok-1),") ; in-a-match:$in_a_match\n\n";
+	    ## finality.
+	    if ($in_a_match == scalar(@$replace_ref)) {
+		#print "DEBUG Completed match found\n";
+		$current_matcher = 0;
+		#print "DEBUG need to remove the following entries: @kids_for_deletion\n";
+		push @commit_kids_for_deletion , @kids_for_deletion;
+	    }
+
+	} else {
+	    $tok++;
+	}
+
+	#
+    }
+
+    ## now remove tokens that we commited for deletion
+    foreach my $tok (@commit_kids_for_deletion) {
+	$self->remove_child( $kids[$tok]);
+    }
+}
+
+
+sub to_ruby {
+    my ($self) = @_;
+
+    #print "\n#X#",ref($self)."'".$self->content."'"."#X#\n";
+    #print STDERR "\n#X#",ref($self)."#X#\n";
+
+    ## strip my/our/local from vars
+    if ($self->isa("PPI::Statement::Variable")) {
+	my @vartoks =  $self->children ;
+	if ( $vartoks[0]->content() =~ /^(my|local|our)$/) {
+	    $self->remove_child( $vartoks[0] );
+	    # if whitespace immediately follows the removed token
+	    # we should remove that also
+	    if ( $vartoks[1]->isa("PPI::Token::Whitespace") ) {
+		$self->remove_child( $vartoks[1] );
+	    }
+	}
+    }
+
+    ## BEGINNING OF LISTS, CONSTRUCTORS, ETC ##
+
+    if ($self->isa("PPI::Structure::List")) {
+	print '(';
+	print 'XX';
+    } elsif ($self->isa("PPI::Structure::Constructor")) {
+	print $self->start;
+    } elsif ($self->isa("PPI::Structure::Subscript")) {
+	print "[";
+    } elsif ($self->isa("PPI::Statement::Expression")) {
+    } elsif ($self->isa("PPI::Structure::Condition")) {
+	# insert space in case of "if(foo)" so it
+	# turns into "if foo" and not "iffoo"
+	print ' ';
+    } elsif ($self->isa("PPI::Structure::For")) {
+	# insert space in case of "for(###)" so it
+	# turns into "for ###" and not "for###"
+	print ' ';
+    }
+
+    ## How can we get rid of trailing semicolons? 
+    ## Let's go through all the children of a node - if the current-child
+    ## is a semicolon, and if the next whitespace has a newline then we
+    ## should be able to safely remove the trailing semicolon.
+    ## ** this doesnt actually work as planned, since the ';'-Structure
+    ## is never in the same PPI hierarchy as the whitespace. :-(
+
+
+    ## match+reg-sub or match+reg-transliterate should remove
+    ## the match symbol '=~' and adjoining spaces so we can replace s/// with .sub()
+    $self->token_replace(
+	[ ["Symbol", 1, 'keep'],
+	  ["Whitespace", 0, 'toss'],
+	  ["Operator", 1, 'toss', '=~'],
+	  ["Whitespace", 0, 'toss'],
+	  ["Regexp::(Substitute|Transliterate)" ,1, 'keep'],
+	]);
+
+    ## replace 'use constant FOO => VALUE' with 'FOO = VALUE'
+    $self->token_replace( 
+	[ ["Word" , 1, 'toss', 'use'],
+	  ["Whitespace" ,1, 'toss'],
+	  ["Word" ,1, 'toss', 'constant'],
+	  ["Whitespace" ,1, 'toss'],
+	  ["Word" ,1, 'keep'],
+	  ["Whitespace" ,0, 'keep'],
+	  ["Operator" ,1, 'replace', '=>', '='],
+	  ["Whitespace" ,0, 'keep'],
+	]);
+
+    # perl allows '$foo -> new()', replace with '$foo->new()' for 
+    # later conversion to 'foo.new()'
+    $self->token_replace( 
+	[ ["Whitespace" ,0, 'toss'],
+	  ["Operator" ,1, 'keep', '->'],
+	  ["Whitespace" ,0, 'toss'],
+	]);
+	  
+
+    my @kids = $self->children;
+
+
+    ## Recursively descend into children
+    foreach my $kid ($self->children) {
+	$kid->to_ruby()
+    }
+
+    ## END OF LISTS, CONSTRUCTORS, ETC ##
+
+    if ($self->isa("PPI::Structure::List")) {
+	print ")";
+    } elsif ($self->isa("PPI::Structure::Constructor")) {
+	print $self->finish;
+    } elsif ($self->isa("PPI::Structure::Subscript")) {
+	print "]";
+    }
+    if ($self->isa("PPI::Statement::Compound") || 
+	$self->isa("PPI::Statement::Sub") ) {
+	print "end";
+    }
+}
+
+##===========================================================
+
+package PPI::Token;
+
+sub set_ruby {
+    ## setting a ruby version of the content here, may use later?
+    my ($self, $ruby_content) = @_;
+    $self->{'ruby'} = $ruby_content;
+}
+
+sub ruby_fix_var { ## non-oo method ##
+    my ($sigil,$varname) = @_;
+    ## special-case vars such as $_ , $|, $1, $2, 
+    ## and others that typically dont start with an alpha, underscore, or :: 
+    ## don't want to be renamed
+    if ($varname !~ /^([A-Za-z_]|::)/) {
+	return("${sigil}${varname}");
+    }
+    ## lowercasing of vars
+    my @varlist = split(/::/,$varname);
+    $varlist[-1] =~ s/^([A-Z])/lc($1)/gxe;
+    $varname = join('::',@varlist);
+    return $varname
+}
+
+sub to_ruby {
+    my ($self,$indent) = @_; 
+    #DEBUG print ref($self)."'".$self->content."'"."\n";
+    #DEBUG print "#".ref($self)."#";
+    if ( $self->isa("PPI::Token::Cast")) {
+	# unsupported recast of array to hash, etc.
+	# not sure how to handle this case
+	# silently ignore for now, let's hope ruby ducktyping
+	# will save us
+    } elsif ( $self->isa("PPI::Token::Comment")) {
+	# comments are mostly as-is, but we can replace the editor-mode-string
+	my $comment = $self->content;
+	$comment =~ s/-\*-\s*perl\s*-\*-/-*- ruby -*-/g;
+	print $comment;
+    } elsif ( $self->isa("PPI::Token::DashedWord")) {
+	# unsupported
+	croak("no support for DashedWord. should be using Word");
+    } elsif ( $self->isa("PPI::Token::Number")) {
+	my $num = $self->content;
+	## ruby doesnt allow leading decimal
+	$num = "0${num}" if ($num =~ /^\./);
+	print $num;
+#    } elsif ( $self->isa("PPI::Token::Number::Binary")) {
+#    } elsif ( $self->isa("PPI::Token::Number::Exp")) {
+#    } elsif ( $self->isa("PPI::Token::Number::Float")) {
+#    } elsif ( $self->isa("PPI::Token::Number::Hex")) {
+#    } elsif ( $self->isa("PPI::Token::Number::Octal")) {
+#    } elsif ( $self->isa("PPI::Token::Number::Version")) {
+    } elsif ( $self->isa("PPI::Token::Prototype")) {
+	## do not handle prototypes
+	## will just ignore them for now
+
+    } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
+	my $word =  $self->content;
+	$word =~ s/^qq/%Q/;
+	print $word;
+    } elsif ( $self->isa("PPI::Token::Quote::Double")) {
+	## attempt to convert 
+	my $doublequote =  $self->content;
+	$doublequote =~ s/([\$\@\%])\{(\w+)}\}/"#{".ruby_fix_var($1,$2)."}"/gxe;
+	$doublequote =~ s/([\$\@\%])(\w+)/"#{".ruby_fix_var($1,$2)."}"/gxe;
+	print $doublequote;
+    } elsif ( $self->isa("PPI::Token::Quote::Literal")) {
+	my $word =  $self->content;
+	$word =~ s/^q/%q/;
+	print $word;
+
+    } elsif ( $self->isa("PPI::Token::Data") ||
+	      $self->isa("PPI::Token::End") ||
+	      $self->isa("PPI::Token::HereDoc") ||
+	      $self->isa("PPI::Token::Label") ||
+	      # pass magic-vars through for now. 
+	      # may need do some mappingin the future
+	      $self->isa("PPI::Token::Magic") ||
+	      $self->isa("PPI::Token::Quote::Single") ||
+	      $self->isa("PPI::Token::Quote") ||
+	      $self->isa("PPI::Token::QuoteLike::Backtick") ||
+	      $self->isa("PPI::Token::QuoteLike::Command") ||
+	      $self->isa("PPI::Token::QuoteLike::Readline") ||
+	      $self->isa("PPI::Token::QuoteLike::Regexp") ||
+	      $self->isa("PPI::Token::QuoteLike::Words") ||
+	      $self->isa("PPI::Token::Regexp::Match") ||
+	      $self->isa("PPI::Token::Regexp") ||
+	      $self->isa("PPI::Token::Separator") ||
+	      $self->isa("PPI::Token::Structure") ||
+	      $self->isa("PPI::Token::Whitespace")) {
+	my $cmd =  $self->content;
+	$self->set_ruby($cmd);
+	print $cmd;
+    } elsif ( $self->isa("PPI::Token::Attribute") || # unsupported
+              $self->isa("PPI::Token::BOM") ||  # unsupported byte order mark?
+              $self->isa("PPI::Token::QuoteLike") ||
+              $self->isa("PPI::Token::Unknown")) {
+        croak("unknown/unsupported token type: '".ref($self)."'");
+
+    } else {
+	print $self->content;
+    }
+}
+
+##===========================================================
+
+package PPI::Token::ArrayIndex;
+sub to_ruby {
+    my ($self) = @_;
+    my $arrayindex = $self->content;
+    # $#var to var.length
+    $arrayindex =~ s/^\$\#//; 
+    print "${arrayindex}.length" ;
+    $self->set_ruby("${arrayindex}.length");
+}
+
+##===========================================================
+
+package PPI::Token::Operator;
+sub to_ruby {
+    my ($self) = @_;
+    my $oper = $self->content;
+    ## change to ruby method call syntax (arrows to dots)
+    ## change perl eq/ne/gt/lt string compare methods to ruby standard compares
+    if ($oper eq '->') {
+	$oper = "." ; 
+    } elsif ($oper eq 'eq') {
+	$oper = "==";
+    } elsif ($oper eq 'ne') {
+	$oper = "!=";
+    } elsif ($oper eq 'gt') {
+	$oper = ">";
+    } elsif ($oper eq 'lt') {
+	$oper = "<";
+    } elsif ($oper eq 'ge') {
+	$oper = ">=";
+    } elsif ($oper eq 'le') {
+	$oper = "<=";
+    }
+    print $oper;
+    $self->set_ruby($oper);
+}
+
+package PPI::Token::Pod;
+sub to_ruby {
+    my ($self) = @_;
+    my $pod = $self->content;
+    my @podlines = split("\n",$pod);
+    my @rdoclines = ();
+    for my $podline (@podlines) {
+	## currently, nested bold/code/ital modifers are unsupported.
+	$podline=~s/C\<([^>]*)\>/<tt>$1<\/tt>/g;
+	$podline=~s/I\<([^>]*)\>/<em>$1<\/em>/g;
+	$podline=~s/B\<([^>]*)\>/<b>$1<\/b>/g;
+	
+	if ($podline=~/^\s*\=(pod|cut|back|over.*)/x) { 
+	    # skip =pod, =cut
+	} elsif ($podline=~/^\s*\=item\s+\*/x) {
+	    $podline=~s/\s*\=item\s+\*/\*/;
+	    print "# ${podline}\n";
+	} elsif ($podline=~/^\s*\=item\s+([0-9]+)/x) {
+	    $podline=~s/\s*\=item\s+(\d+)/$1\./;
+	    print "# ${podline}\n";
+	} elsif ($podline=~/^\s*\=head1/x) {
+	    $podline=~s/\s*\=head1/=/;
+	    print "# ${podline}\n";
+	} elsif ($podline=~/^\s*\=head2/x) {
+	    $podline=~s/\s*\=head2/==/;
+	    print "# ${podline}\n";
+	} else {
+	    print "# ${podline}\n";
+	}
+	push @rdoclines, $podline;
+    }
+    $self->set_ruby(join('',@rdoclines));
+}
+package PPI::Token::Regexp::Substitute;
+sub to_ruby {
+    my ($self) = @_;
+    my $subst_expr = $self->content;
+    # convert to .sub! method. though maybe not what you really want in ruby
+    $subst_expr=~s/^s//;
+    my $delimiter = substr($subst_expr,0,1);
+    $delimiter = '\|' if ($delimiter eq '|');
+    my @w = split($delimiter,$subst_expr);
+    #replace string returned from split may be undef/empty
+    $w[2] = "" unless defined $w[2];  
+
+    ## default to sub!, no opts
+    ## if flags exist, then pick those up, perhaps switching to gsub
+    my ($subop, $reopts) = ('sub!', $w[3] // "");
+    if ($reopts =~ 'g') {
+	$subop = 'gsub!';
+	$reopts=~s/g//; # remove the 'g'
+    }
+
+    my $regex = ".${subop}(/$w[1]/${reopts}, '$w[2]')";
+    $self->set_ruby($regex);
+    print $regex;
+} 
+
+package PPI::Token::Regexp::Transliterate;
+sub to_ruby {
+    my ($self) = @_;
+    my $transexpr = $self->content;
+    # convert to .tr! method. though maybe not what you really want in ruby
+    $transexpr=~s/^tr//;
+    my $delimiter = substr($transexpr,0,1);
+    $delimiter = '\|' if ($delimiter eq '|');
+    my @w = split($delimiter,$transexpr);
+    #replace string returned from split may be undef/empty
+    $w[2] = "" unless defined $w[2];  
+    my $regex = ".tr!('$w[1]','$w[2]')";
+    $self->set_ruby($regex);
+    print $regex;
+} 
+
+package PPI::Token::Symbol;
+sub to_ruby {
+    my ($self) = @_;
+    my $word =  $self->content;
+    $word =~ s/^([\$\@\%])//;
+    my $sigil = $1;
+    $word = PPI::Token::ruby_fix_var($sigil,$word);
+    print $word;
+    $self->set_ruby($word);
+} 
+
+package PPI::Token::Word;
+sub to_ruby {
+    my ($self) = @_;
+    my $word =  $self->content;
+    $word = 'def' if ($word eq 'sub');
+    $word = 'nil' if ($word eq 'undef');
+    print $word;
+    $self->set_ruby($word);
+}
+
+
+########################
+package main;
+my $document = PPI::Document->new( 
+   $ARGV[0] , readonly => 1,
+);
+
+## for now, we print everything inline.  
+## later on we should probably rebuild the datastruct in place and
+## use a writer to dump the ruby-code
+$document->to_ruby;
+
+
+
+##PPI::Token::ArrayIndex 	Token getting the last index for an array   	  	
+##PPI::Token::Attribute 	A token for a subroutine attribute   	  	
+##PPI::Token::BOM 	Tokens representing Unicode byte order marks   	  	
+##PPI::Token::Cast 	A prefix which forces a value into a different context   	  	
+##PPI::Token::Comment 	A comment in Perl source code   	  	
+##PPI::Token::DashedWord 	A dashed bareword token   	  	
+##PPI::Token::Data 	The actual data in the __DATA__ section of a file   	  	
+##PPI::Token::End 	Completely useless content after the __END__ tag   	  	
+##PPI::Token::HereDoc 	Token class for the here-doc   	  	
+##PPI::Token::Label 	Token class for a statement label   	  	
+##PPI::Token::Magic 	Tokens representing magic variables   	  	
+##PPI::Token::Number 	Token class for a number   	  	
+##PPI::Token::Number::Binary 	Token class for a binary number   	  	
+##PPI::Token::Number::Exp 	Token class for an exponential notation number   	  	
+##PPI::Token::Number::Float 	Token class for a floating-point number   	  	
+##PPI::Token::Number::Hex 	Token class for a binary number   	  	
+##PPI::Token::Number::Octal 	Token class for a binary number   	  	
+##PPI::Token::Number::Version 	Token class for a byte-packed number   	  	
+##PPI::Token::Operator 	Token class for operators   	  	
+##PPI::Token::Pod 	Sections of POD in Perl documents   	  	
+##PPI::Token::Prototype 	A subroutine prototype descriptor   	  	
+##PPI::Token::Quote 	String quote abstract base class   	  	
+##PPI::Token::Quote::Double 	A standard "double quote" token   	  	
+##PPI::Token::Quote::Interpolate 	The interpolation quote-like operator   	  	
+##PPI::Token::Quote::Literal 	The literal quote-like operator   	  	
+##PPI::Token::Quote::Single 	A 'single quote' token   	  	
+##PPI::Token::QuoteLike 	Quote-like operator abstract base class   	  	
+##PPI::Token::QuoteLike::Backtick 	A `backticks` command token   	  	
+##PPI::Token::QuoteLike::Command 	The command quote-like operator   	  	
+##PPI::Token::QuoteLike::Readline 	The readline quote-like operator   	  	
+##PPI::Token::QuoteLike::Regexp 	Regexp constructor quote-like operator   	  	
+##PPI::Token::QuoteLike::Words 	Word list constructor quote-like operator   	  	
+##PPI::Token::Regexp 	Regular expression abstract base class   	  	
+##PPI::Token::Regexp::Match 	A standard pattern match regex   	  	
+##PPI::Token::Regexp::Substitute 	A match and replace regular expression token   	  	
+##PPI::Token::Regexp::Transliterate 	A transliteration regular expression token   	  	
+##PPI::Token::Separator 	The __DATA__ and __END__ tags   	  	
+##PPI::Token::Structure 	Token class for characters that define code structure   	  	
+##PPI::Token::Symbol 	A token class for variables and other symbols   	  	
+##PPI::Token::Unknown 	Token of unknown or as-yet undetermined type   	  	
+##PPI::Token::Whitespace 	Tokens representing ordinary white space   	  	
+##PPI::Token::Word 	The generic "word" Token  
