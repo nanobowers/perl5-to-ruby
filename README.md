@@ -6,7 +6,7 @@ They said it couldn't be done.  They were right.
 ## Motivation
 Maybe you have some perl modules you want to convert to ruby.  The best way is probably a ground-up rewrite.  But who has time for that nonsense?  At first i wrote a cheapy script using a few dozen regexes to save myself from having to perform search&replaces in my editor.  That helped, but only got me a tiny fraction of the way there.
 
-The internet was not my friend -  search "Perl Cannot Be Parsed".  Finally i found PPI and tried my hand at cobbling together a super dirty syntax translator.
+The internet was not my friend -  search "Perl Cannot Be Parsed".  Finally i found PPI and tried hacking together a super dirty syntax translator.
 
 ## Self Criticism
 * Even if you could translate Perl to Ruby, you shouldn't.
