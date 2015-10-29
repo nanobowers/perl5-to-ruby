@@ -234,12 +234,12 @@ sub ruby_fix_var { ## non-oo method ##
     ## special-case vars such as $_ , $|, $1, $2, 
     ## and others that typically dont start with an alpha, underscore, or :: 
     ## don't want to be renamed
-    if ($varname !~ /^([A-Za-z_]|::)/) {
+    if ($varname eq '_' or $varname=~/^[0-9]$/ or $varname !~ /^([A-Za-z_]|::)/) {
 	return("${sigil}${varname}");
     }
     ## lowercasing of vars
     my @varlist = split(/::/,$varname);
-    $varlist[-1] =~ s/^([A-Z_0-9]+)/lc($1)/gxe;
+    $varlist[-1] =~ s/^([A-Z][A-Za-z_0-9]*)/lc($1)/gxe;
     $varname = join('::',@varlist);
     return $varname
 }
@@ -278,7 +278,6 @@ sub to_ruby {
 
     } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
 	my $word =  $self->content;
-	print STDERR "XXXX $word XXXX";
 	$word =~ s/^qq/%Q/;
 	print $word;
     } elsif ( $self->isa("PPI::Token::Quote::Double")) {
@@ -367,6 +366,8 @@ sub to_ruby {
 	$oper = ">=";
     } elsif ($oper eq 'le') {
 	$oper = "<=";
+    } elsif ($oper eq 'cmp') {
+	$oper = "<=>";
     }
     print $oper;
     $self->set_ruby($oper);
