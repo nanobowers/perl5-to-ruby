@@ -12,6 +12,36 @@ package PPI::Document;
 
 sub to_ruby {
     my ($self) = @_;
+
+    #TODO# trailing semicolon removal at document level.
+    #TODO# this doesn't catch everything, should be possible at 
+    #TODO# other levels also, so need to move it later.
+
+    # How can we get rid of trailing semicolons? 
+    # if our current node's last child is a semicolon, AND
+    # if the next whitespace is a newline or we're at the end of the document, 
+    # we should be able to safely remove the trailing semicolon.
+    my @kids = $self->children;
+    for (my $i = 1; $i < $#kids; $i++) {
+	my $nextkid = $kids[$i+1];
+	my $curkid = $kids[$i];
+	if ($curkid->isa("PPI::Statement")) {
+	    my $has_trailing_semicolon;
+	    my @substat = $curkid->children;
+	    my $last_substat = $substat[-1];
+	    if ($last_substat->isa("PPI::Token::Structure") && $last_substat eq ';') {
+		$has_trailing_semicolon = 1;
+	    }
+	    if ( $has_trailing_semicolon && 
+		 (! defined($nextkid) || 
+		  ( $nextkid->isa("PPI::Token::Whitespace") && ($nextkid->content eq "\n") )
+		 ) ) {
+		$last_substat->set_ruby_remove(1);
+	    }
+	}
+    }
+
+    ## iterate through the document
     foreach my $kid ($self->children) {
 	$kid->to_ruby();
     }
@@ -34,7 +64,7 @@ sub token_replace {
 
     my @commit_kids_for_deletion = ();
     my @kids_for_deletion = ();
-    while ($tok<@kids) {
+    while ($tok < @kids) {
 
 	if (defined $replace_ref->[$current_matcher]) {
 	    my $match_type = $replace_ref->[$current_matcher]->[0];
@@ -107,9 +137,6 @@ sub token_replace {
 sub to_ruby {
     my ($self) = @_;
 
-    #print "\n#X#",ref($self)."'".$self->content."'"."#X#\n";
-    #print STDERR "\n#X#",ref($self)."#X#\n";
-
     ## strip my/our/local from vars
     if ($self->isa("PPI::Statement::Variable")) {
 	my @vartoks =  $self->children ;
@@ -124,17 +151,9 @@ sub to_ruby {
     }
 
     ## BEGINNING OF LISTS, CONSTRUCTORS, ETC ##
-=pod
-    if ($self->isa("PPI::Structure")) {
-	print  "XX|";
-	print  ref($self);
-	print  $self->content;
-	print  "|XX";
-   }
-=cut
+
     if ($self->isa("PPI::Structure::List")) {
 	print '(';
-	#print 'XX';
     } elsif ($self->isa("PPI::Structure::Constructor")) {
 	print $self->start;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
@@ -149,14 +168,6 @@ sub to_ruby {
 	# turns into "for ###" and not "for###"
 	print ' ';
     }
-
-    ## How can we get rid of trailing semicolons? 
-    ## Let's go through all the children of a node - if the current-child
-    ## is a semicolon, and if the next whitespace has a newline then we
-    ## should be able to safely remove the trailing semicolon.
-    ## ** this doesnt actually work as planned, since the ';'-Structure
-    ## is never in the same PPI hierarchy as the whitespace. :-(
-
 
     ## match+reg-sub or match+reg-transliterate should remove
     ## the match symbol '=~' and adjoining spaces so we can replace s/// with .sub()
@@ -188,10 +199,6 @@ sub to_ruby {
 	  ["Whitespace" ,0, 'toss'],
 	]);
 	  
-
-    my @kids = $self->children;
-
-
     ## Recursively descend into children
     foreach my $kid ($self->children) {
 	$kid->to_ruby()
@@ -212,10 +219,10 @@ sub to_ruby {
     if ($self->isa("PPI::Statement::Compound")) {
 	# do not want to duplicate 'end' inside if/else/elsif chains
 	# need either struct:block stat:compound, not both
-	print "end #(COMP) ";
+	print "end #compound ";
     } elsif ($self->isa("PPI::Statement::Sub")) {
-	# where is this used? 
-	# print "end #(SUB) ";
+	# useful for closing out a subfunction
+	print "end #sub ";
     }
 }
 
@@ -223,10 +230,34 @@ sub to_ruby {
 
 package PPI::Token;
 
+################################
+# accessors for ruby-tags
+################################
+sub set_ruby_remove {
+    my ($self, $ruby_remove) = @_;
+    $self->{'ruby_remove'} = $ruby_remove // 1;
+}
+sub get_ruby_remove {
+    ## setting a ruby type of the content here, may use later?
+    my ($self) = @_;
+    return $self->{'ruby_remove'} // 0;
+}
 sub set_ruby {
     ## setting a ruby version of the content here, may use later?
     my ($self, $ruby_content) = @_;
     $self->{'ruby'} = $ruby_content;
+    return $self->{'ruby'};
+}
+sub set_ruby_as_perl {
+    ## setting a ruby version of the content same as existing perl content
+    my ($self) = @_;
+    $self->{'ruby'} = $self->content();
+    return $self->{'ruby'};
+}
+sub set_ruby_type {
+    ## setting a ruby type of the content here, may use later?
+    my ($self, $ruby_type) = @_;
+    $self->{'ruby_type'} = $ruby_type;
 }
 
 sub ruby_fix_var { ## non-oo method ##
@@ -275,33 +306,32 @@ sub to_ruby {
     } elsif ( $self->isa("PPI::Token::Prototype")) {
 	## do not handle prototypes
 	## will just ignore them for now
-
-    } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
-	my $word =  $self->content;
-	$word =~ s/^qq/%Q/;
-	print $word;
     } elsif ( $self->isa("PPI::Token::Quote::Double")) {
-	## attempt to convert 
+	## attempt to interpolate vars in double-quoted strs
 	my $doublequote =  $self->content;
 	$doublequote =~ s/([\$\@\%])\{(\w+)}\}/"#{".ruby_fix_var($1,$2)."}"/gxe;
 	$doublequote =~ s/([\$\@\%])(\w+)/"#{".ruby_fix_var($1,$2)."}"/gxe;
-	print $doublequote;
+	print $self->set_ruby($doublequote);
+    } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
+	my $word =  $self->content;
+	$word =~ s/^qq/%Q/;
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::Quote::Literal")) {
 	my $word =  $self->content;
 	$word =~ s/^q/%q/;
-	print $word;
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Regexp")) {
 	my $word =  $self->content;
 	$word =~ s/^qr/%r/;
-	print $word;
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Words")) {
 	my $word =  $self->content;
 	$word =~ s/^qw/%w/;
-	print $word;
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Command")) {
 	my $word =  $self->content;
 	$word =~ s/^qx/%x/;
-	print $word;
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::Data") ||
 	      $self->isa("PPI::Token::End") ||
 	      $self->isa("PPI::Token::HereDoc") ||
@@ -319,8 +349,11 @@ sub to_ruby {
 	      $self->isa("PPI::Token::Structure") ||
 	      $self->isa("PPI::Token::Whitespace")) {
 	my $cmd =  $self->content;
-	$self->set_ruby($cmd);
-	print $cmd;
+	$self->set_ruby_as_perl();
+	unless ($self->get_ruby_remove() ) {
+	    print $cmd;
+	}
+
     } elsif ( $self->isa("PPI::Token::Attribute") || # unsupported
               $self->isa("PPI::Token::BOM") ||  # unsupported byte order mark?
               $self->isa("PPI::Token::QuoteLike") ||
@@ -328,7 +361,7 @@ sub to_ruby {
         croak("unknown/unsupported token type: '".ref($self)."'");
 
     } else {
-	print $self->content;
+	print $self->set_ruby_as_perl()
     }
 }
 
@@ -340,38 +373,33 @@ sub to_ruby {
     my $arrayindex = $self->content;
     # $#var to var.length
     $arrayindex =~ s/^\$\#//; 
-    print "${arrayindex}.length" ;
-    $self->set_ruby("${arrayindex}.length");
+    print $self->set_ruby("${arrayindex}.length");
 }
 
 ##===========================================================
 
 package PPI::Token::Operator;
+
+## change to ruby method call syntax (arrows to dots)
+## change perl eq/ne/gt/lt string compare methods to ruby standard compares
+our $oper_map = { 'eq' => '==',
+	      'ne' => '!=',
+	      'gt' => '>',
+	      'lt' => '<',
+	      'ge' => '>=',
+	      'le' => '<=',
+	      'cmp' => '<=>',
+	      '->' => '.',
+};
+
 sub to_ruby {
     my ($self) = @_;
     my $oper = $self->content;
-    ## change to ruby method call syntax (arrows to dots)
-    ## change perl eq/ne/gt/lt string compare methods to ruby standard compares
-    if ($oper eq '->') {
-	$oper = "." ; 
-    } elsif ($oper eq 'eq') {
-	$oper = "==";
-    } elsif ($oper eq 'ne') {
-	$oper = "!=";
-    } elsif ($oper eq 'gt') {
-	$oper = ">";
-    } elsif ($oper eq 'lt') {
-	$oper = "<";
-    } elsif ($oper eq 'ge') {
-	$oper = ">=";
-    } elsif ($oper eq 'le') {
-	$oper = "<=";
-    } elsif ($oper eq 'cmp') {
-	$oper = "<=>";
-    }
-    print $oper;
-    $self->set_ruby($oper);
+    my $rubyoper = $oper_map->{$oper} // $oper;
+    print $self->set_ruby($rubyoper);
 }
+
+##===========================================================
 
 package PPI::Token::Pod;
 sub to_ruby {
@@ -424,8 +452,7 @@ sub to_ruby {
     }
 
     my $regex = ".${subop}(/$w[1]/${reopts}, '$w[2]')";
-    print $regex;
-    $self->set_ruby($regex);
+    print $self->set_ruby($regex);
 } 
 
 package PPI::Token::Regexp::Transliterate;
@@ -440,19 +467,26 @@ sub to_ruby {
     #replace string returned from split may be undef/empty
     $w[2] = "" unless defined $w[2];  
     my $regex = ".tr!('$w[1]','$w[2]')";
-    print $regex;
-    $self->set_ruby($regex);
+    print $self->set_ruby($regex);
 } 
 
 package PPI::Token::Symbol;
 sub to_ruby {
     my ($self) = @_;
     my $word =  $self->content;
-    $word =~ s/^([\$\@\%])//;
+    $word =~ s/^([\$\@\%\&])//;
     my $sigil = $1;
     $word = PPI::Token::ruby_fix_var($sigil,$word);
-    print $word;
-    $self->set_ruby($word);
+    if ($sigil eq '&') { 
+	$self->set_ruby_type("Function_Call"); 
+    } elsif ($sigil eq '$') {
+	$self->set_ruby_type("Scalar"); 
+    } elsif ($sigil eq '@') {
+	$self->set_ruby_type("Array"); 
+    } elsif ($sigil eq '%') {
+	$self->set_ruby_type("Hash"); 
+    }
+    print $self->set_ruby($word);
 } 
 
 package PPI::Token::Word;
@@ -461,8 +495,7 @@ sub to_ruby {
     my $word =  $self->content;
     $word = 'def' if ($word eq 'sub');
     $word = 'nil' if ($word eq 'undef');
-    print $word;
-    $self->set_ruby($word);
+    print $self->set_ruby($word);
 }
 
 
