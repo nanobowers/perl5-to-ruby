@@ -17,11 +17,11 @@ task :test do
   good_tests.each do |pfile| 
     out_rb = pfile.ext("rb")
     sh "./bin/p2r #{pfile} > #{out_rb}"
-    ruby(out_rb) do |ok, result|
+    ruby("#{out_rb} > /dev/null") do |ok, result|
       if ok
-        puts "PASSED test #{out_rb}"
+        puts "\033[32mPASSED\033[0m test #{out_rb}"
       else
-        puts "FAILED test #{out_rb}"
+        puts "\033[31mFAILED\033[0m test #{out_rb}"
       end
     end
   end
