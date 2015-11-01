@@ -48,6 +48,24 @@ sub to_ruby {
 }
 
 ##===========================================================
+package PPI::Structure;
+
+sub ruby_start { 
+    my ($self,$brack) = @_;
+    if (defined $brack) {
+	$self->{'ruby_start'} = $brack;
+    }
+    return $self->{'ruby_start'};
+}
+
+sub ruby_finish { 
+    my ($self,$brack) = @_;
+    if (defined $brack) {
+	$self->{'ruby_finish'} = $brack;
+    }
+    return $self->{'ruby_finish'};
+}
+
 
 package PPI::Node;
 
@@ -137,7 +155,7 @@ sub token_replace {
 sub to_ruby {
     my ($self) = @_;
 
-    ## strip my/our/local from vars
+    ## for variable statements, strip my/our/local and whitespace
     if ($self->isa("PPI::Statement::Variable")) {
 	my @vartoks =  $self->children ;
 	if ( $vartoks[0]->content() =~ /^(my|local|our)$/) {
@@ -149,11 +167,28 @@ sub to_ruby {
 	    }
 	}
     }
+    if ($self->isa("PPI::Statement")) {
+    ## remove whitespace between symbool, '='
+	my @nws_kids = grep { !($_->isa("PPI::Token::Whitespace")); } $self->children;
+	if ( $nws_kids[0]->isa("PPI::Token::Symbol") and
+	     $nws_kids[1]->isa("PPI::Token::Operator") and
+	     $nws_kids[1]->content eq '=' and
+	     $nws_kids[2]->isa("PPI::Structure::List") ) {
+	    if ($nws_kids[0] =~ /^\@/) {
+		$nws_kids[2]->ruby_start('[');
+		$nws_kids[2]->ruby_finish(']');
+	    } elsif ($nws_kids[0] =~ /^\%/) {
+		$nws_kids[2]->ruby_start('{');
+		$nws_kids[2]->ruby_finish('}');
+	    } 
+	}
+    }    
 
     ## BEGINNING OF LISTS, CONSTRUCTORS, ETC ##
 
     if ($self->isa("PPI::Structure::List")) {
-	print '(';
+	my $start_brack = $self->ruby_start() // '(';
+	print $start_brack;
     } elsif ($self->isa("PPI::Structure::Constructor")) {
 	print $self->start;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
@@ -207,7 +242,8 @@ sub to_ruby {
     ## END OF LISTS, CONSTRUCTORS, ETC ##
 
     if ($self->isa("PPI::Structure::List")) {
-	print ")";
+	my $finish_brack = $self->ruby_finish() // ')';
+	print $finish_brack;
     } elsif ($self->isa("PPI::Structure::Constructor")) {
 	print $self->finish;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
@@ -490,12 +526,18 @@ sub to_ruby {
 } 
 
 package PPI::Token::Word;
+our $ruby_word_map = {
+    'sub' => 'def',
+    'undef' => 'nil',
+    'STDOUT' => '$stdout',
+    'STDERR' => '$stderr',
+    'say' => 'puts',
+};
 sub to_ruby {
     my ($self) = @_;
     my $word =  $self->content;
-    $word = 'def' if ($word eq 'sub');
-    $word = 'nil' if ($word eq 'undef');
-    print $self->set_ruby($word);
+    my $rubyword = $ruby_word_map->{$word} // $word;
+    print $self->set_ruby($rubyword);
 }
 
 

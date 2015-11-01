@@ -6,20 +6,23 @@ use constant FOO1 => 11 ;
 use constant FOO3=> 13 ;
 use constant FOO4=>14 ;
 
-my $foo = "0";
+ local $tail = 'tail';
+  our $wing = 'wing';
+   my $foo = "0";
+
 $a = 1;
 @abcd = qw(fee fi fo fum);
 $zoot = { 'a' => "hashref_value_1\n", 'b' => "hashref_value_2\n" };
 $ABCD_LENGTH = $#abcd;
 
-# no support currently for perl assign from list-like to array/hash.
-
-#@abcd2 = ('fee','fi','fo','fum');
-#%zoot2 = ( 'a' => 'b' );
+# assign from list-like to array/hash.
+@abcd2 = ('fee','fi','fo','fum');
+%zoot2 = ( 'a' => 'b' );
 
 
 ## array access and length
-$b = $abcd[1];
+$b = $abcd[FOO4]; ## access with constant
+$b = $abcd[1];    ## access with integer
 $ABCD_LENGTH = $#abcd;
 
 ## hash access
@@ -41,9 +44,11 @@ $Abc = 1;
 $_ = 0;
 $_ = $+;
 
-# broken hash as 'list' or fatcomma list
+# broken : hash as comman separated list
 #%yy = ('lh_key', "list-hash-value\n");
 #print $yy{'lh_key'};
-#%yy = ('fch_key' , "fatcomma-hash-value\n");
-#print $yy{'fch_key'};
+
+# working : hash as fatcomma separated list
+%yy = ('fch_key' => "fatcomma-hash-value\n");
+print $yy{'fch_key'};
 
