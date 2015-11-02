@@ -24,29 +24,10 @@ sub to_ruby {
 	$kid->to_ruby();
     }
 }
-sub ruby_content {
-    my ($self) = @_;
-    my $output = '';
-    foreach my $kid ($self->children) {
-	$output .= $kid->ruby_content;
-    }
-    return $output;
-}
 
 ##===========================================================
 
 package PPI::Structure;
-
-sub ruby_content {
-    my ($self) = @_; 
-    my $output = '';
-    $output .= $self->ruby_start();
-    foreach my $kid ($self->children) {
-	$output .= $kid->ruby_content;
-    }
-    $output .= $self->ruby_finish();
-    return $output;
-}
 
 sub ruby_start { 
     my ($self,$brack) = @_;
@@ -66,45 +47,6 @@ sub ruby_finish {
 
 ##===========================================================
 
-package PPI::Element;
-################################
-# accessors for ruby-tags
-################################
-sub set_ruby_remove {
-    my ($self, $ruby_remove) = @_;
-    $self->{'ruby_remove'} = $ruby_remove // 1;
-}
-sub get_ruby_remove {
-    ## setting a ruby type of the content here, may use later?
-    my ($self) = @_;
-    return $self->{'ruby_remove'} // 0;
-}
-sub set_ruby {
-    ## setting a ruby version of the content here, may use later?
-    my ($self, $ruby_content) = @_;
-    $self->{'ruby'} = $ruby_content;
-    return $self->{'ruby'};
-}
-sub set_ruby_as_perl {
-    ## setting a ruby version of the content same as existing perl content
-    my ($self) = @_;
-    $self->{'ruby'} = $self->content();
-    return $self->{'ruby'};
-}
-
-sub ruby_content {
-    my ($self) = @_;
-    if (defined $self->{'ruby'}) {
-	return "" if ($self->get_ruby_remove);
-	return $self->{'ruby'};
-    }
-    return ref($self);
-}
-sub set_ruby_type {
-    ## setting a ruby type of the content here, may use later?
-    my ($self, $ruby_type) = @_;
-    $self->{'ruby_type'} = $ruby_type;
-}
 package PPI::Node;
 
 sub children_nws {
@@ -148,7 +90,7 @@ sub token_replace {
     my $matched_all = 0;
     my $current_matcher = 0;
     my $in_a_match = 0;
-    my $tok = 0; 
+    my $tok=0; 
 
     my @commit_kids_for_deletion = ();
     my @kids_for_deletion = ();
@@ -290,49 +232,21 @@ sub to_ruby { # node
     ## BEGINNING OF LISTS, CONSTRUCTORS, ETC ##
 
     if ($self->isa("PPI::Structure::List")) {
-	## some places above, we override the start/finish,
-	## so preserve them
-	$self->ruby_start( $self->ruby_start() // '(' );
-	$self->ruby_finish( $self->ruby_finish() // ')');
+	my $start_brack = $self->ruby_start() // '(';
+	print $start_brack;
     } elsif ($self->isa("PPI::Structure::Constructor")) {
-	$self->ruby_start($self->start);
-	$self->ruby_finish($self->finish);
+	print $self->start;
     } elsif ($self->isa("PPI::Structure::Subscript")) {
-	$self->ruby_start('[');
-	$self->ruby_finish(']');
+	print "[";
+    } elsif ($self->isa("PPI::Statement::Expression")) {
     } elsif ($self->isa("PPI::Structure::Condition")) {
 	# insert space in case of "if(foo)" so it
 	# turns into "if foo" and not "iffoo"
-	$self->ruby_start(' ');
-	$self->ruby_finish(' ');
+	print ' ';
     } elsif ($self->isa("PPI::Structure::For")) {
 	# insert space in case of "for(###)" so it
 	# turns into "for ###" and not "for###"
-	$self->ruby_start(' ');
-	$self->ruby_finish('');
-    } elsif ($self->isa("PPI::Structure")) {
-	#$self->ruby_start($self->start);
-	#$self->ruby_finish($self->finish);
-	$self->ruby_start('');
-	$self->ruby_finish('');
-###---------------------	
-###   Statements
-###---------------------	
-    } elsif ($self->isa("PPI::Statement::Compound")) {
-	# do not want to duplicate 'end' inside if/else/elsif chains
-	# need either struct:block stat:compound, not both
-	$self->ruby_start("");
-	$self->ruby_finish("end #compound ");
-    } elsif ($self->isa("PPI::Statement::Expression")) {
-	$self->set_ruby_remove();
-    } elsif ($self->isa("PPI::Statement::Sub")) {
-	$self->ruby_start('');
-	$self->ruby_finish("end #sub "); #closing out a subfunction
-    } elsif ($self->isa("PPI::Statement")) {
-	$self->ruby_start('');
-	$self->ruby_finish('');
-    } else {
-	warn ref($self),"\n";
+	print ' ';
     }
 
     ## match+reg-sub or match+reg-transliterate should remove
@@ -369,41 +283,63 @@ sub to_ruby { # node
     foreach my $kid ($self->children) {
 	$kid->to_ruby()
     }
-}
 
-##===========================================================
+    ## END OF LISTS, CONSTRUCTORS, ETC ##
 
-package PPI::Statement;
-sub ruby_content {
-    my ($self) = @_; 
-    my $output = '';
-    $output .= $self->ruby_start() // '';
-    foreach my $kid ($self->children) {
-	$output .= $kid->ruby_content;
+    if ($self->isa("PPI::Structure::List")) {
+	my $finish_brack = $self->ruby_finish() // ')';
+	print $finish_brack;
+    } elsif ($self->isa("PPI::Structure::Constructor")) {
+	print $self->finish;
+    } elsif ($self->isa("PPI::Structure::Subscript")) {
+	print "]";
+    } elsif ( $self->isa("PPI::Structure::Block")  ) {
+	#print "end ";
     }
-    $output .= $self->ruby_finish() // '';
-    return $output;
-}
-sub ruby_start { 
-    my ($self,$brack) = @_;
-    if (defined $brack) {
-	$self->{'ruby_start'} = $brack;
-    }
-    return $self->{'ruby_start'};
-}
 
-sub ruby_finish { 
-    my ($self,$brack) = @_;
-    if (defined $brack) {
-	$self->{'ruby_finish'} = $brack;
+    if ($self->isa("PPI::Statement::Compound")) {
+	# do not want to duplicate 'end' inside if/else/elsif chains
+	# need either struct:block stat:compound, not both
+	print "end #compound ";
+    } elsif ($self->isa("PPI::Statement::Sub")) {
+	# useful for closing out a subfunction
+	print "end #sub ";
     }
-    return $self->{'ruby_finish'};
 }
 
 ##===========================================================
 
 package PPI::Token;
 
+################################
+# accessors for ruby-tags
+################################
+sub set_ruby_remove {
+    my ($self, $ruby_remove) = @_;
+    $self->{'ruby_remove'} = $ruby_remove // 1;
+}
+sub get_ruby_remove {
+    ## setting a ruby type of the content here, may use later?
+    my ($self) = @_;
+    return $self->{'ruby_remove'} // 0;
+}
+sub set_ruby {
+    ## setting a ruby version of the content here, may use later?
+    my ($self, $ruby_content) = @_;
+    $self->{'ruby'} = $ruby_content;
+    return $self->{'ruby'};
+}
+sub set_ruby_as_perl {
+    ## setting a ruby version of the content same as existing perl content
+    my ($self) = @_;
+    $self->{'ruby'} = $self->content();
+    return $self->{'ruby'};
+}
+sub set_ruby_type {
+    ## setting a ruby type of the content here, may use later?
+    my ($self, $ruby_type) = @_;
+    $self->{'ruby_type'} = $ruby_type;
+}
 
 sub ruby_fix_var { ## non-oo method ##
     my ($sigil,$varname) = @_;
@@ -433,7 +369,7 @@ sub to_ruby {
 	# comments are mostly as-is, but we can replace the editor-mode-string
 	my $comment = $self->content;
 	$comment =~ s/-\*-\s*perl\s*-\*-/-*- ruby -*-/g;
-	$self->set_ruby($comment);
+	print $comment;
     } elsif ( $self->isa("PPI::Token::DashedWord")) {
 	# unsupported
 	croak("no support for DashedWord. should be using Word");
@@ -441,7 +377,7 @@ sub to_ruby {
 	my $num = $self->content;
 	## ruby doesnt allow leading decimal
 	$num = "0${num}" if ($num =~ /^\./);
-	$self->set_ruby($num);
+	print $num;
 #    } elsif ( $self->isa("PPI::Token::Number::Binary")) {
 #    } elsif ( $self->isa("PPI::Token::Number::Exp")) {
 #    } elsif ( $self->isa("PPI::Token::Number::Float")) {
@@ -456,27 +392,27 @@ sub to_ruby {
 	my $doublequote =  $self->content;
 	$doublequote =~ s/([\$\@\%])\{(\w+)}\}/"#{".ruby_fix_var($1,$2)."}"/gxe;
 	$doublequote =~ s/([\$\@\%])(\w+)/"#{".ruby_fix_var($1,$2)."}"/gxe;
-	$self->set_ruby($doublequote);
+	print $self->set_ruby($doublequote);
     } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
 	my $word =  $self->content;
 	$word =~ s/^qq/%Q/;
-	$self->set_ruby($word);
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::Quote::Literal")) {
 	my $word =  $self->content;
 	$word =~ s/^q/%q/;
-	$self->set_ruby($word);
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Regexp")) {
 	my $word =  $self->content;
 	$word =~ s/^qr/%r/;
-	$self->set_ruby($word);
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Words")) {
 	my $word =  $self->content;
 	$word =~ s/^qw/%w/;
-	$self->set_ruby($word);
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::QuoteLike::Command")) {
 	my $word =  $self->content;
 	$word =~ s/^qx/%x/;
-	$self->set_ruby($word);
+	print $self->set_ruby($word);
     } elsif ( $self->isa("PPI::Token::Data") ||
 	      $self->isa("PPI::Token::End") ||
 	      $self->isa("PPI::Token::HereDoc") ||
@@ -495,6 +431,10 @@ sub to_ruby {
 	      $self->isa("PPI::Token::Whitespace")) {
 	my $cmd =  $self->content;
 	$self->set_ruby_as_perl();
+	unless ($self->get_ruby_remove() ) {
+	    print $cmd;
+	}
+
     } elsif ( $self->isa("PPI::Token::Attribute") || # unsupported
               $self->isa("PPI::Token::BOM") ||  # unsupported byte order mark?
               $self->isa("PPI::Token::QuoteLike") ||
@@ -502,7 +442,7 @@ sub to_ruby {
         croak("unknown/unsupported token type: '".ref($self)."'");
 
     } else {
-	$self->set_ruby_as_perl()
+	print $self->set_ruby_as_perl()
     }
 }
 
@@ -514,7 +454,7 @@ sub to_ruby {
     my $arrayindex = $self->content;
     # $#var to var.length
     $arrayindex =~ s/^\$\#//; 
-    $self->set_ruby("${arrayindex}.length");
+    print $self->set_ruby("${arrayindex}.length");
 }
 
 ##===========================================================
@@ -523,29 +463,21 @@ package PPI::Token::Operator;
 
 ## change to ruby method call syntax (arrows to dots)
 ## change perl eq/ne/gt/lt string compare methods to ruby standard compares
-our $oper_map = { 
-    'eq' => '==',
-    'ne' => '!=',
-    'gt' => '>',
-    'lt' => '<',
-    'ge' => '>=',
-    'le' => '<=',
-    'cmp' => '<=>',
-    '->' => '.',
-    "." => '+', # string concatenation
-    '.=' => '+=', 
-    'x' => '*', # string multiply
-    'x=' => '*=', 
-    '//' => '||', # logical-defined-or (leaning-or)
-    '//=' => '||=', 
-
+our $oper_map = { 'eq' => '==',
+	      'ne' => '!=',
+	      'gt' => '>',
+	      'lt' => '<',
+	      'ge' => '>=',
+	      'le' => '<=',
+	      'cmp' => '<=>',
+	      '->' => '.',
 };
 
 sub to_ruby {
     my ($self) = @_;
     my $oper = $self->content;
     my $rubyoper = $oper_map->{$oper} // $oper;
-    $self->set_ruby($rubyoper);
+    print $self->set_ruby($rubyoper);
 }
 
 ##===========================================================
@@ -557,9 +489,9 @@ sub to_ruby {
     my @rdoclines = ();
     for my $podline (@podlines) {
 	## currently, nested bold/code/ital modifers are unsupported.
-	$podline =~s/C\<([^>]*)\>/<tt>$1<\/tt>/g;
-	$podline =~s/I\<([^>]*)\>/<em>$1<\/em>/g;
-	$podline =~s/B\<([^>]*)\>/<b>$1<\/b>/g;
+	$podline=~s/C\<([^>]*)\>/<tt>$1<\/tt>/g;
+	$podline=~s/I\<([^>]*)\>/<em>$1<\/em>/g;
+	$podline=~s/B\<([^>]*)\>/<b>$1<\/b>/g;
 	
 	if ($podline=~/^\s*\=(pod|cut|back|over.*)/x) { 
 	    # skip =pod, =cut, etc
@@ -571,9 +503,12 @@ sub to_ruby {
 	} elsif ($podline=~/^\s*\=head1/x) {
 	    $podline=~s/\s*\=head1/=/;
 	} elsif ($podline=~/^\s*\=head2/x) {
-	    $podline=~s/\s*\=head2/\=\=/;
+	    $podline=~s/\s*\=head2/==/;
 	}
-	push @rdoclines, "# $podline\n";
+	push @rdoclines, $podline;
+    }
+    foreach my $line (@rdoclines) {
+	print "# $line\n";
     }
     $self->set_ruby(join('',@rdoclines));
 }
@@ -598,7 +533,7 @@ sub to_ruby {
     }
 
     my $regex = ".${subop}(/$w[1]/${reopts}, '$w[2]')";
-    $self->set_ruby($regex);
+    print $self->set_ruby($regex);
 } 
 
 package PPI::Token::Regexp::Transliterate;
@@ -613,7 +548,7 @@ sub to_ruby {
     #replace string returned from split may be undef/empty
     $w[2] = "" unless defined $w[2];  
     my $regex = ".tr!('$w[1]','$w[2]')";
-    $self->set_ruby($regex);
+    print $self->set_ruby($regex);
 } 
 
 package PPI::Token::Symbol;
@@ -632,7 +567,7 @@ sub to_ruby {
     } elsif ($sigil eq '%') {
 	$self->set_ruby_type("Hash"); 
     }
-    $self->set_ruby($word);
+    print $self->set_ruby($word);
 } 
 
 package PPI::Token::Word;
@@ -647,7 +582,7 @@ sub to_ruby {
     my ($self) = @_;
     my $word =  $self->content;
     my $rubyword = $ruby_word_map->{$word} // $word;
-    $self->set_ruby($rubyword);
+    print $self->set_ruby($rubyword);
 }
 
 
@@ -661,7 +596,6 @@ my $document = PPI::Document->new(
 ## later on we should probably rebuild the datastruct in place and
 ## use a writer to dump the ruby-code
 $document->to_ruby;
-print $document->ruby_content;
 
 
 

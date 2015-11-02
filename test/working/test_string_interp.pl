@@ -13,3 +13,10 @@ $s = " ${b} ${b}";
 # escaped dollar
 $s = " \$b ";
 $s = " \${b} ";
+
+# string concat
+$x = "12";
+$x .= "3";
+
+# string multiply
+$x3 = $x x 3;

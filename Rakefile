@@ -12,20 +12,33 @@ end
 good_tests = FileList.new("test/working/*.pl")
 CLEAN.add( good_tests.ext("rb") )
 
+def run_rb_test rbfile, opts=""
+  ruby("#{opts} #{rbfile} > /dev/null") do |ok, result|
+    if ok
+      puts "\033[32mPASSED\033[0m test #{rbfile}"
+    else
+      puts "\033[31mFAILED\033[0m test #{rbfile}"
+    end
+  end
+end
+
 desc "run p2r on testcases"
 task :test do
   good_tests.each do |pfile| 
     out_rb = pfile.ext("rb")
     sh "./bin/p2r #{pfile} > #{out_rb}"
-    ruby("#{out_rb} > /dev/null") do |ok, result|
-      if ok
-        puts "\033[32mPASSED\033[0m test #{out_rb}"
-      else
-        puts "\033[31mFAILED\033[0m test #{out_rb}"
-      end
-    end
+    run_rb_test(out_rb)
   end
-
 end
 
 task :default => [:check, :test]
+
+desc "run p2r on testcases"
+task :testc do
+  good_tests.each do |pfile| 
+    out_rb = pfile.ext("rb")
+    sh "./bin/p2r #{pfile} > #{out_rb}"
+    run_rb_test(out_rb, '-c')
+  end
+end
+

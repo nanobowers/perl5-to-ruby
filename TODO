@@ -1,0 +1,18 @@
+## TODO ##
+
+# pre-replace this:
+#   moose ('bar', 'baz');
+# with this, like perltidy:
+#   moose('bar', 'baz');
+
+# The fat comma operator (=>) also automatically quotes any bareword
+#  used as its left operand (Hashes).
+# replace this:
+# %a = ( BAZ => "bar") ;
+# with this:
+# %a = ( 'BAZ' => "bar") ;
+
+## DONE ##
+# replace 'x' - operator with '*'
+# sub-function params with my()=@_; to def params when first line of sub
+
