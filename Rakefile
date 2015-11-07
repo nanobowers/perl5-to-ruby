@@ -47,3 +47,5 @@ task :unit_test do
   sh "prove -I lib/perl"
 end
 
+desc "unit tests"
+task :unit => :unit_test
