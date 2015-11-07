@@ -12,6 +12,9 @@ sub ruby_content {
     $output .= $self->ruby_finish() // '';
     return $output;
 }
+
+## gettor / settor for starting ruby-brackets
+
 sub ruby_start { 
     my ($self,$brack) = @_;
     if (defined $brack) {
@@ -19,6 +22,8 @@ sub ruby_start {
     }
     return $self->{'ruby_start'};
 }
+
+## gettor / settor for finishing ruby-brackets
 
 sub ruby_finish { 
     my ($self,$brack) = @_;
