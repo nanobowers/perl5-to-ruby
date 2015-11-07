@@ -32,7 +32,7 @@ task :regression_test do
   end
 end
 
-task :default => [:check, :regression_test]
+task :default => [:check, :regression_test, :unit_test]
 
 desc "run p2r on testcases"
 task :testc do
