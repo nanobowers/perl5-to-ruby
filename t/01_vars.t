@@ -27,6 +27,7 @@ ok_p2r('$Abc;', 'abc;', 'scalar capitalized');
 ok_p2r('$_ = 0;', '$_ = 0;', 'scalar $_' );
 ok_p2r('$_ = $+;', '$_ = $+;', 'scalar $_ and other magic-var');
 
+
 # assignments
 ok_p2r(q|$a = 1;|, 
        'a = 1;',

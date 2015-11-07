@@ -1,3 +1,4 @@
+# -*- perl -*-
 use P2R;
  
 use Test::Simple tests => 14;
