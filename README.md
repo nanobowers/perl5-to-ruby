@@ -33,3 +33,8 @@ _Follow these steps in no particular order_
 * Anything remotely complicated
 * Produce working ruby code for all but the simplest of testcases
 
+## Requirements
+
+ruby, rake, perl, prove
+
+Tested with perl 5.18, ruby 2.1.5 on Linux Mint Debian Edition v1
