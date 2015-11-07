@@ -1,4 +1,5 @@
 require 'rake/clean'
+verbose(1)
 
 # allow override of perl from the cmdline
 perl = ENV['perl'] || 'perl'
@@ -23,7 +24,7 @@ def run_rb_test rbfile, opts=""
 end
 
 desc "run p2r on testcases"
-task :test do
+task :regression_test do
   good_tests.each do |pfile| 
     out_rb = pfile.ext("rb")
     sh "./bin/p2r #{pfile} > #{out_rb}"
@@ -31,7 +32,7 @@ task :test do
   end
 end
 
-task :default => [:check, :test]
+task :default => [:check, :regression_test]
 
 desc "run p2r on testcases"
 task :testc do
@@ -40,5 +41,9 @@ task :testc do
     sh "./bin/p2r #{pfile} > #{out_rb}"
     run_rb_test(out_rb, '-c')
   end
+end
+
+task :unit_test do
+  sh "prove -I lib/perl"
 end
 
