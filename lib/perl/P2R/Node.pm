@@ -133,10 +133,12 @@ sub to_ruby { # node
 	    }
 	}
     }
+
     if ($self->isa("PPI::Statement")) {
-    ## remove whitespace between symbool, '='
-	my @nws_kids = grep { !($_->isa("PPI::Token::Whitespace")); } $self->children;
-	if ( $nws_kids[0]->isa("PPI::Token::Symbol") and
+    ## remove whitespace between symbol, '='
+	my @nws_kids = $self->children_nws();
+	if ( scalar(@nws_kids) > 2 and
+	     $nws_kids[0]->isa("PPI::Token::Symbol") and
 	     $nws_kids[1]->isa("PPI::Token::Operator") and
 	     $nws_kids[1]->content eq '=' and
 	     $nws_kids[2]->isa("PPI::Structure::List") ) {
@@ -155,15 +157,15 @@ sub to_ruby { # node
     ##
     if ($self->isa("PPI::Statement::Sub")) {
 	my ($funcsig,$defname);
-	my @subkids = grep { !($_->isa("PPI::Token::Whitespace")); } $self->children;
+	my @subkids = $self->children_nws();
 	if ( $subkids[0]->isa("PPI::Token::Word") && 
 	     ($subkids[0]->content eq 'sub') &&
 	     $subkids[2]->isa("PPI::Structure::Block") ) {
 	    $defname = $subkids[1]->content;
 	    
-	    my @blockkids = $subkids[2]->children_nws;
+	    my @blockkids = $subkids[2]->children_nws();
 	    if ($blockkids[0]->isa("PPI::Statement::Variable")) {
-		my @myvarkids = $blockkids[0]->children_nws;
+		my @myvarkids = $blockkids[0]->children_nws();
 		my @xx = map { ref($_);} @myvarkids;
 		if ( ($myvarkids[0]->content eq 'my') &&
 		     $myvarkids[1]->isa("PPI::Structure::List") && 
@@ -217,12 +219,12 @@ sub to_ruby { # node
 	# do not want to duplicate 'end' inside if/else/elsif chains
 	# need either struct:block stat:compound, not both
 	$self->ruby_start("");
-	$self->ruby_finish("end #compound ");
+	$self->ruby_finish("end");
     } elsif ($self->isa("PPI::Statement::Expression")) {
 	$self->set_ruby_remove();
     } elsif ($self->isa("PPI::Statement::Sub")) {
 	$self->ruby_start('');
-	$self->ruby_finish("end #sub "); #closing out a subfunction
+	$self->ruby_finish("end"); #closing out a subfunction
     } elsif ($self->isa("PPI::Statement")) {
 	$self->ruby_start('');
 	$self->ruby_finish('');
@@ -252,14 +254,36 @@ sub to_ruby { # node
 	  ["Whitespace" ,0, 'keep'],
 	]);
 
+
+
     # perl allows '$foo -> new()', replace with '$foo->new()' for 
     # later conversion to 'foo.new()'
     $self->token_replace( 
-	[ ["Whitespace" ,0, 'toss'],
+	[ ["Symbol" ,1, 'keep'],
+	  ["Whitespace" ,0, 'toss'],
 	  ["Operator" ,1, 'keep', '->'],
 	  ["Whitespace" ,0, 'toss'],
 	]);
-	  
+
+    ## converting dereferenced list/hash indexing to ruby indexing 
+    ## e.g. $a->[1]    to  a[1]
+    ##      $a->{'b'}  to  a['b']
+    my @akids = $self->children;
+    if (scalar(@akids)>2 ) {
+	for (my $i=0; $i<scalar(@akids)-2; $i++) {
+	    my ($symbol, $oper, $subscript) = @akids[$i..$i+2];
+	    if ( $symbol->isa('PPI::Token::Symbol') and
+		 $oper->isa('PPI::Token::Operator') and 
+		 $oper->content eq '->' and
+		 $subscript->isa('PPI::Structure::Subscript')) {
+		$subscript->ruby_start('[');
+		$subscript->ruby_finish(']');
+		$oper->set_ruby_remove();
+		#print STDERR $akids[$i+2]->start,"\n";
+	    }
+	}
+    }
+
     ## Recursively descend into children
     foreach my $kid ($self->children) {
 	$kid->to_ruby()
