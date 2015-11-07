@@ -26,6 +26,9 @@ sub to_ruby {
 	# not sure how to handle this case
 	# silently ignore for now, let's hope ruby ducktyping
 	# will save us
+	my $cast = $self->content;
+	$self->set_ruby($cast);
+
     } elsif ( $self->isa("PPI::Token::Comment")) {
 	# comments are mostly as-is, but we can replace the editor-mode-string
 	my $comment = $self->content;
@@ -47,7 +50,8 @@ sub to_ruby {
 #    } elsif ( $self->isa("PPI::Token::Number::Version")) {
     } elsif ( $self->isa("PPI::Token::Prototype")) {
 	## do not handle prototypes
-	## will just ignore them for now
+	## will just set them as empty for now
+	$self->set_ruby("");
     } elsif ( $self->isa("PPI::Token::Quote::Double")) {
 	## attempt to interpolate vars in double-quoted strs
 	my $doublequote =  $self->content;
