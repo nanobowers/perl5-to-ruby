@@ -1,19 +1,7 @@
 # -*- perl -*-
 use P2R;
- 
 use Test::Simple tests => 14;
-
-sub ok_p2r { 
-    my ($perlcode,$expect_rb,$comment) = @_;
-    my $doc = PPI::Document->new( \$perlcode );
-    $doc->to_ruby;
-    my $rubycode = $doc->ruby_content;
-    #print "PERL:$perlcode\n";
-    #print "RUBY:$rubycode\n";
-    (my $expectrb_no_spaces = $expect_rb) =~s/\s+//g;
-    (my $ruby_no_spaces = $rubycode) =~s/\s+//g;
-    ok( $ruby_no_spaces eq $expectrb_no_spaces ,$comment)
-}
+use Test::P2R;
 
 ok_p2r('$aval0 = ($a == 1)', 'aval0 = (a == 1)', 'compare ==');
 ok_p2r('$aval1 = ($a != 1)', 'aval1 = (a != 1)', 'compare !=');
