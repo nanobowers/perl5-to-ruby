@@ -1,18 +1,24 @@
-## TODO ##
+== KNOWN TO BE BROKEN
 
-# pre-replace this:
-#   moose ('bar', 'baz');
-# with this, like perltidy:
-#   moose('bar', 'baz');
+* BEGIN { } block output is not formatted correctly
+* single-line if statements are broke
+* while (<X>) {} file iteration
+* print $FH "string"
+* c-style for-loops (for ($x=1;$x<100;$x++) {})
 
-# The fat comma operator (=>) also automatically quotes any bareword
-#  used as its left operand (Hashes).
-# replace this:
-# %a = ( BAZ => "bar") ;
-# with this:
-# %a = ( 'BAZ' => "bar") ;
+== MISC TODO
 
-## DONE ##
-# replace 'x' - operator with '*'
-# sub-function params with my()=@_; to def params when first line of sub
+semicolon removal at line-end only works in a few specific cases right now
+
+pre-replace this:
+   moose ('bar', 'baz');
+with this, like perltidy:
+   moose('bar', 'baz');
+
+The fat comma operator (=>) also automatically quotes any bareword used as its left operand (Hashes).
+
+replace this:
+ %a = ( BAZ => "bar") ;
+with this:
+ %a = ( 'BAZ' => "bar") ;
 
