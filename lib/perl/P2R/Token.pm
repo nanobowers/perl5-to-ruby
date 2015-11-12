@@ -1,5 +1,5 @@
 use PPI;
-
+use strict;
 package PPI::Token;
 
 sub ruby_fix_var { ## non-oo method ##
@@ -55,8 +55,13 @@ sub to_ruby {
     } elsif ( $self->isa("PPI::Token::Quote::Double")) {
 	## attempt to interpolate vars in double-quoted strs
 	my $doublequote =  $self->content;
-	$doublequote =~ s/([\$\@\%])\{(\w+)}\}/"#{".ruby_fix_var($1,$2)."}"/gxe;
-	$doublequote =~ s/([\$\@\%])(\w+)/"#{".ruby_fix_var($1,$2)."}"/gxe;
+
+	## ${ABC} => #{ABC}
+	$doublequote =~ s/([\$\@])\{(\w+)\}/"#{".ruby_fix_var($1,$2)."}"/gxe;
+
+	## $ABC => #{ABC}
+	$doublequote =~ s/([\$\@])(\w+)/"#{".ruby_fix_var($1,$2)."}"/gxe;
+
 	$self->set_ruby($doublequote);
     } elsif ( $self->isa("PPI::Token::Quote::Interpolate")) {
 	my $word =  $self->content;
@@ -89,7 +94,6 @@ sub to_ruby {
 	      $self->isa("PPI::Token::Quote") ||
 	      $self->isa("PPI::Token::QuoteLike::Backtick") ||
 	      $self->isa("PPI::Token::QuoteLike::Readline") ||
-	      $self->isa("PPI::Token::Regexp::Match") ||
 	      $self->isa("PPI::Token::Regexp") ||
 	      $self->isa("PPI::Token::Separator") ||
 	      $self->isa("PPI::Token::Structure") ||
@@ -211,11 +215,13 @@ sub to_ruby {
 
 package PPI::Token::Regexp::Transliterate;
 
+# convert to .tr! method. though maybe not what you really want in ruby
+
 sub to_ruby {
     my ($self) = @_;
     my $transexpr = $self->content;
-    # convert to .tr! method. though maybe not what you really want in ruby
-    $transexpr=~s/^tr//;
+    # handle both tr/// and y/// types.
+    $transexpr=~s/^(tr|y)//;
     my $delimiter = substr($transexpr,0,1);
     $delimiter = '\|' if ($delimiter eq '|');
     my @w = split($delimiter,$transexpr);
@@ -224,6 +230,28 @@ sub to_ruby {
     my $regex = ".tr!('$w[1]','$w[2]')";
     $self->set_ruby($regex);
 } 
+
+##===========================================================
+
+package PPI::Token::Regexp::Match;
+
+sub to_ruby {
+    my ($self) = @_;
+    my $match_expr = $self->content;
+
+    # rip off "m", replace with nothing.  we will not try to
+    # use the String#match method here, just preserve '=~' or '!~'
+    $match_expr=~s/^m//;
+
+    # in ruby if delimiter is non '/', we should %r it to
+    # classify it as a regexp
+    my $delimiter = substr($match_expr,0,1);
+    if ( $delimiter ne '/' ) { 
+	$match_expr = "%r" . $match_expr;
+    }
+    $self->set_ruby($match_expr);
+} 
+
 
 ##===========================================================
 
