@@ -1,12 +1,4 @@
-== KNOWN TO BE BROKEN
-
-* BEGIN { } block output is not formatted correctly
-* single-line if statements are broke
-* while (<X>) {} file iteration
-* print $FH "string"
-* c-style for-loops (for ($x=1;$x<100;$x++) {})
-
-== MISC TODO
+## TODO
 
 semicolon removal at line-end only works in a few specific cases right now
 
