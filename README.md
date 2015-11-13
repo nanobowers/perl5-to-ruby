@@ -8,10 +8,9 @@ Maybe you have some perl modules you want to convert to ruby.  The best way is p
 
 The internet was not my friend -  search "Perl Cannot Be Parsed".  Finally i found PPI and tried hacking together a super dirty syntax translator.
 
-## Self Criticism
+## Criticism
 * Even if you could translate Perl to Ruby, you shouldn't.
-* Output from this tool is and will always be trash
-These are valid points.
+* Output from this tool is either trash, or not the Ruby way, or both.
 
 ## Expected use model
 _Follow these steps in no particular order_
@@ -38,3 +37,11 @@ _Follow these steps in no particular order_
 ruby, rake, perl, prove
 
 Tested with perl 5.18, ruby 2.1.5 on Linux Mint Debian Edition v1
+
+## Known to be broken
+
+* <tt>BEGIN { }</tt> block output is not formatted correctly
+* single-line if/unless statements are broken
+* <tt>while (<X>) {}</tt> file iteration
+* <tt>print $FH "string"</tt>
+* c-style for-loops <tt>for ($x=1;$x<100;$x++) {}</tt>, still unclear how to map to something ruby-like
