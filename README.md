@@ -42,6 +42,5 @@ Tested with perl 5.18, ruby 2.1.5 on Linux Mint Debian Edition v1
 
 * <tt>BEGIN { }</tt> block output is not formatted correctly
 * single-line if/unless statements are broken
-* <tt>while (<X>) {}</tt> file iteration
 * <tt>print $FH "string"</tt>
 * c-style for-loops <tt>for ($x=1;$x<100;$x++) {}</tt>, still unclear how to map to something ruby-like

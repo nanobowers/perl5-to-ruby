@@ -93,7 +93,7 @@ sub to_ruby {
 	      $self->isa("PPI::Token::Quote::Single") ||
 	      $self->isa("PPI::Token::Quote") ||
 	      $self->isa("PPI::Token::QuoteLike::Backtick") ||
-	      $self->isa("PPI::Token::QuoteLike::Readline") ||
+
 	      $self->isa("PPI::Token::Regexp") ||
 	      $self->isa("PPI::Token::Separator") ||
 	      $self->isa("PPI::Token::Structure") ||
@@ -108,6 +108,28 @@ sub to_ruby {
 
     } else {
 	$self->set_ruby_as_perl()
+    }
+}
+
+
+package PPI::Token::QuoteLike::Readline;
+
+## converting <$FH> to fh.gets
+## there are dozens of ways to read/slurp files in ruby, and
+## this is not necessarily the ruby-way, but it is functionally
+## the closest approximation, i think.
+
+sub to_ruby {
+    my ($self) = @_;
+    my $readline = $self->content;
+    ## rip out the part between the <> to get the var
+    if ($readline =~ /^\<\s*(\*|\$|)(\S*)\s*\>$/) {
+	my ($sigil,$file_handle) = ($1,$2);
+	$file_handle = PPI::Token::ruby_fix_var($sigil,$file_handle);
+	$self->set_ruby("${file_handle}.gets");
+    } else {
+	warn("P2R::Token::QuoteLike::Readline - misunderstood readline '$readline'");
+	$self->set_ruby($readline);
     }
 }
 
