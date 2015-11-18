@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 
+use feature qw(say);
 use warnings;
 use strict;
 use PPI;
@@ -16,7 +17,9 @@ unless (scalar(@ARGV)>0) {
 my $document = PPI::Document->new( 
    $ARGV[0] , readonly => 1,
 );
-
+$document->index_locations();
+$document->remove_trailing_semicolons();
+	    
 $document->to_ruby;
 print $document->ruby_content;
 

@@ -7,33 +7,6 @@ sub children_nws {
     my @nws_kids = grep { !($_->isa("PPI::Token::Whitespace")); } $self->children;
     return( @nws_kids );
 }
-sub ruby_remove_trailing_semicolon {
-    # How can we get rid of trailing semicolons? 
-    # if our current node's last child is a semicolon, AND
-    # if the next whitespace is a newline or we're at the end of the document, 
-    # we should be able to safely remove the trailing semicolon.
-    my ($self) = @_;
-    my @kids = $self->children;
-    for (my $i = 1; $i < $#kids; $i++) {
-	my $nextkid = $kids[$i+1];
-	my $curkid = $kids[$i];
-	if ($curkid->isa("PPI::Statement")) {
-	    my $has_trailing_semicolon;
-	    my @substat = $curkid->children;
-	    my $last_substat = $substat[-1];
-	    if ($last_substat->isa("PPI::Token::Structure") && $last_substat eq ';') {
-		$has_trailing_semicolon = 1;
-	    }
-	    if ( $has_trailing_semicolon && 
-		 (! defined($nextkid) || 
-		  ( $nextkid->isa("PPI::Token::Whitespace") && ($nextkid->content eq "\n") )
-		 ) ) {
-		$last_substat->set_ruby_remove(1);
-	    }
-	}
-    }
-    return 0;
-}
 
 sub token_replace {
     my ($self, $replace_ref) = @_;
