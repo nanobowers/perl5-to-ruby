@@ -28,8 +28,8 @@ _Follow these steps in no particular order_
 * conditional reformatting
 
 ## What p2r does not do
-* Idiomatic conversions
-* Anything remotely complicated
+* Most idiomatic conversions
+* Complicated stuff
 * Produce working ruby code for all but the simplest of testcases
 
 ## Requirements
@@ -37,6 +37,24 @@ _Follow these steps in no particular order_
 ruby, rake, perl, prove
 
 Tested with perl 5.18, ruby 2.1.5 on Linux Mint Debian Edition v1
+
+## Features
+
+### Document level features
+
+* semantic translation
+* semicolon stripping at line-end
+* convert bareword hash-key in conjunction with fatcomma to string literal
+
+### Node level features
+
+* perl list/array/hash literal to ruby Array/Hash
+* perl list/hash dereferencing
+* single-special-case function parameter list generation
+* use constant to ruby constant
+* some regex support
+* translate pod to comments, rdoc format where possible
+
 
 ## Known to be broken
 

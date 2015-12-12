@@ -1,16 +1,8 @@
 ## TODO
 
-semicolon removal at line-end only works in a few specific cases right now
-
 pre-replace this:
    moose ('bar', 'baz');
 with this, like perltidy:
    moose('bar', 'baz');
 
-The fat comma operator (=>) also automatically quotes any bareword used as its left operand (Hashes).
-
-replace this:
- %a = ( BAZ => "bar") ;
-with this:
- %a = ( 'BAZ' => "bar") ;
-
+Replace perl builtin functions with ruby equivalents.

@@ -52,3 +52,6 @@ $_ = $+;
 %yy = ('fch_key' => "fatcomma-hash-value\n");
 print $yy{'fch_key'};
 
+# added support for fatcomma to string-literal
+$a={ FOO=>"bar" , biz => 3};
+%a=( FOO=>"bar" , BAZ => 'buz');

@@ -64,4 +64,30 @@ sub remove_end_of_line_semicolons {
     }
     return 0;
 }
+
+sub fix_fatcomma_bareword_keys {
+    my ($self)=@_;
+    # perl Statement::Expressions may be something like:
+    # %a=( FOO=>"bar");
+    # $a={ FOO=>"bar"};
+    # when the fat-comma (=>) is used, perl replaces FOO with 'FOO'.
+    # we will make this literal translation
+
+    my $expressions = $self->find("PPI::Statement::Expression");
+    foreach my $expr (@$expressions) {
+	my @children_nws = $expr->children_nws;
+	for ($i = 0; $i < $#children_nws; $i++) {
+	    my $curchild = $children_nws[$i];
+	    my $nextchild = $children_nws[$i+1];
+	    if ($curchild->isa("PPI::Token::Word") and
+		$nextchild->isa("PPI::Token::Operator") and 
+		$nextchild->content eq '=>') {
+		my $word_value = $curchild->content;
+		my $quote_token = PPI::Token::Quote::Single->new("'${word_value}'");
+		$curchild->insert_after($quote_token);
+		$curchild->remove();
+	    }
+	}
+    }
+}
 1;

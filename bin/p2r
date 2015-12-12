@@ -22,7 +22,8 @@ my $document = PPI::Document->new(
 );
 $document->index_locations();
 $document->remove_trailing_semicolons();
-	    
+$document->fix_fatcomma_bareword_keys();
+
 $document->to_ruby;
 print $document->ruby_content;
 
