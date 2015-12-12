@@ -11,6 +11,9 @@ use FindBin;
 use lib "${FindBin::Bin}/../lib/perl";
 use P2R;
 
+P2R::App::config(@ARGV);
+#DEBUG# print P2R::App::no_func_replace();
+
 unless (scalar(@ARGV)>0) {
     die "Must give perl file as argument\n";
 }
